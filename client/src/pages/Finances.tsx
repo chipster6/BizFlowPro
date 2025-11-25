@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,21 +22,8 @@ import {
 } from "lucide-react";
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Legend, Pie, Cell } from "recharts";
 import { motion } from "framer-motion";
-
-interface Transaction {
-  id: number;
-  title: string;
-  client: string;
-  date: string;
-  amount: number;
-  type: "income" | "expense" | "travel";
-}
-
-const initialTransactions: Transaction[] = [
-  { id: 1, title: "Website Redesign", client: "Acme Corp", date: "Today, 10:42 AM", amount: 4500, type: "income" },
-  { id: 2, title: "Office Supplies", client: "Staples", date: "Yesterday, 3:15 PM", amount: -245.50, type: "expense" },
-  { id: 3, title: "Travel Reimbursement", client: "Client Meeting", date: "Oct 24, 2023", amount: -85, type: "travel" },
-];
+import { getTransactions, createTransaction, deleteTransaction } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 const monthlyData = [
   { name: "Jan", income: 4000, expenses: 2400, travel: 400 },
@@ -50,32 +38,61 @@ const monthlyData = [
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
 
 export default function FinancesPage() {
-  const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
-  const [formData, setFormData] = useState({ title: "", amount: "", type: "income", client: "" });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({ 
+    title: "", 
+    amount: "", 
+    type: "income", 
+    client: "" 
+  });
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
 
-  const totalIncome = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
-  const totalExpenses = Math.abs(transactions.filter(t => t.type === "expense").reduce((sum, t) => sum + t.amount, 0));
-  const totalTravel = Math.abs(transactions.filter(t => t.type === "travel").reduce((sum, t) => sum + t.amount, 0));
+  const { data: transactions = [], isLoading } = useQuery({
+    queryKey: ["transactions"],
+    queryFn: getTransactions,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createTransaction,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast({ title: "Transaction recorded successfully" });
+      setDialogOpen(false);
+      setFormData({ title: "", amount: "", type: "income", client: "" });
+    },
+    onError: () => {
+      toast({ title: "Failed to record transaction", variant: "destructive" });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteTransaction,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["transactions"] });
+      toast({ title: "Transaction deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete transaction", variant: "destructive" });
+    }
+  });
+
+  const totalIncome = transactions.filter(t => t.type === "income").reduce((sum, t) => sum + parseFloat(t.amount), 0);
+  const totalExpenses = transactions.filter(t => t.type === "expense").reduce((sum, t) => sum + parseFloat(t.amount), 0);
+  const totalTravel = transactions.filter(t => t.type === "travel").reduce((sum, t) => sum + parseFloat(t.amount), 0);
   const netIncome = totalIncome - totalExpenses - totalTravel;
 
   const handleAddTransaction = () => {
-    if (!formData.title || !formData.amount) return;
+    if (!formData.title || !formData.amount) {
+      toast({ title: "Title and amount are required", variant: "destructive" });
+      return;
+    }
 
-    const newTransaction: Transaction = {
-      id: Math.max(...transactions.map(t => t.id), 0) + 1,
-      title: formData.title,
-      client: formData.client,
-      date: "Just now",
-      amount: formData.type === "income" ? parseFloat(formData.amount) : -parseFloat(formData.amount),
-      type: formData.type as "income" | "expense" | "travel"
-    };
-
-    setTransactions([...transactions, newTransaction]);
-    setFormData({ title: "", amount: "", type: "income", client: "" });
+    createMutation.mutate(formData);
   };
 
   const handleDeleteTransaction = (id: number) => {
-    setTransactions(transactions.filter(t => t.id !== id));
+    deleteMutation.mutate(id);
   };
 
   return (
@@ -89,9 +106,9 @@ export default function FinancesPage() {
           <Button variant="outline" size="lg" className="border-dashed">
             <Download className="mr-2 h-4 w-4" /> Export Report
           </Button>
-          <Dialog>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="lg" className="shadow-lg shadow-primary/20">
+              <Button size="lg" className="shadow-lg shadow-primary/20" data-testid="button-record-transaction">
                 <Plus className="mr-2 h-4 w-4" /> Record Transaction
               </Button>
             </DialogTrigger>
@@ -104,9 +121,9 @@ export default function FinancesPage() {
                   <Label>Type</Label>
                   <Tabs value={formData.type} onValueChange={(v) => setFormData({...formData, type: v})}>
                     <TabsList className="grid w-full grid-cols-3">
-                      <TabsTrigger value="income">Income</TabsTrigger>
-                      <TabsTrigger value="expense">Expense</TabsTrigger>
-                      <TabsTrigger value="travel">Travel</TabsTrigger>
+                      <TabsTrigger value="income" data-testid="tab-income">Income</TabsTrigger>
+                      <TabsTrigger value="expense" data-testid="tab-expense">Expense</TabsTrigger>
+                      <TabsTrigger value="travel" data-testid="tab-travel">Travel</TabsTrigger>
                     </TabsList>
                   </Tabs>
                 </div>
@@ -116,6 +133,7 @@ export default function FinancesPage() {
                     placeholder="Transaction name" 
                     value={formData.title}
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
+                    data-testid="input-transaction-title"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -125,6 +143,7 @@ export default function FinancesPage() {
                     placeholder="0.00" 
                     value={formData.amount}
                     onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                    data-testid="input-transaction-amount"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -133,11 +152,12 @@ export default function FinancesPage() {
                     placeholder="Client or category name" 
                     value={formData.client}
                     onChange={(e) => setFormData({...formData, client: e.target.value})}
+                    data-testid="input-transaction-client"
                   />
                 </div>
               </div>
               <DialogFooter>
-                <Button onClick={handleAddTransaction}>Record</Button>
+                <Button onClick={handleAddTransaction} data-testid="button-submit-transaction">Record</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -256,48 +276,54 @@ export default function FinancesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
-            {transactions.map((t, i) => (
-              <motion.div 
-                key={t.id} 
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5 + (i * 0.05) }}
-                className="flex items-center justify-between p-4 rounded-xl bg-card border border-transparent hover:border-border hover:shadow-sm transition-all group"
-              >
-                <div className="flex items-center gap-4">
-                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
-                    t.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 
-                    t.type === 'travel' ? 'bg-blue-100 text-blue-600' : 
-                    'bg-red-100 text-red-600'
-                  }`}>
-                    {t.type === 'income' ? <DollarSign className="h-5 w-5" /> : 
-                     t.type === 'travel' ? <Car className="h-5 w-5" /> : 
-                     <CreditCard className="h-5 w-5" />}
+          {isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading transactions...</div>
+          ) : (
+            <div className="space-y-2">
+              {transactions.map((t, i) => (
+                <motion.div 
+                  key={t.id} 
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.5 + (i * 0.05) }}
+                  className="flex items-center justify-between p-4 rounded-xl bg-card border border-transparent hover:border-border hover:shadow-sm transition-all group"
+                  data-testid={`card-transaction-${t.id}`}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${
+                      t.type === 'income' ? 'bg-emerald-100 text-emerald-600' : 
+                      t.type === 'travel' ? 'bg-blue-100 text-blue-600' : 
+                      'bg-red-100 text-red-600'
+                    }`}>
+                      {t.type === 'income' ? <DollarSign className="h-5 w-5" /> : 
+                       t.type === 'travel' ? <Car className="h-5 w-5" /> : 
+                       <CreditCard className="h-5 w-5" />}
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground group-hover:text-primary transition-colors" data-testid={`text-title-${t.id}`}>{t.title}</p>
+                      <p className="text-sm text-muted-foreground">{t.client}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-semibold text-foreground group-hover:text-primary transition-colors">{t.title}</p>
-                    <p className="text-sm text-muted-foreground">{t.client} • {t.date}</p>
+                  <div className="flex items-center gap-4">
+                    <div className={`font-bold font-mono text-base ${
+                      t.type === 'income' ? 'text-emerald-600' : 'text-foreground'
+                    }`} data-testid={`text-amount-${t.id}`}>
+                      {t.type === 'income' ? '+' : '-'}${parseFloat(t.amount).toFixed(2)}
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDeleteTransaction(t.id)}
+                      data-testid={`button-delete-${t.id}`}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className={`font-bold font-mono text-base ${
-                    t.type === 'income' ? 'text-emerald-600' : 'text-foreground'
-                  }`}>
-                    {t.type === 'income' ? '+' : '-'}${Math.abs(t.amount).toFixed(2)}
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleDeleteTransaction(t.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              </motion.div>
-            ))}
-          </div>
+                </motion.div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

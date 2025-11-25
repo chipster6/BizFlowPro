@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,37 +31,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
-
-interface Invoice {
-  id: string;
-  client: string;
-  date: string;
-  dueDate: string;
-  amount: string;
-  status: "Paid" | "Pending" | "Overdue";
-  items: number;
-}
-
-const initialInvoices: Invoice[] = [
-  { 
-    id: "INV-001", 
-    client: "Acme Corp", 
-    date: "Oct 24, 2023", 
-    dueDate: "Nov 24, 2023", 
-    amount: "$4,500.00", 
-    status: "Paid",
-    items: 3 
-  },
-  { 
-    id: "INV-002", 
-    client: "TechStart Inc", 
-    date: "Oct 23, 2023", 
-    dueDate: "Nov 07, 2023", 
-    amount: "$1,200.00", 
-    status: "Pending",
-    items: 1 
-  },
-];
+import { getInvoices, createInvoice, deleteInvoice, updateInvoiceStatus } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 
 const container = {
   hidden: { opacity: 0 },
@@ -73,10 +46,66 @@ const item = {
 };
 
 export default function InvoicesPage() {
-  const [invoices, setInvoices] = useState<Invoice[]>(initialInvoices);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [formData, setFormData] = useState({ client: "", amount: "", items: "1" });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [formData, setFormData] = useState({ 
+    invoiceNumber: "", 
+    clientName: "", 
+    amount: "", 
+    items: "1",
+    dueDate: "",
+    status: "Pending"
+  });
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: invoices = [], isLoading } = useQuery({
+    queryKey: ["invoices"],
+    queryFn: getInvoices,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createInvoice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      toast({ title: "Invoice created successfully" });
+      setDialogOpen(false);
+      setFormData({ 
+        invoiceNumber: "", 
+        clientName: "", 
+        amount: "", 
+        items: "1",
+        dueDate: "",
+        status: "Pending"
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to create invoice", variant: "destructive" });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteInvoice,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      toast({ title: "Invoice deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete invoice", variant: "destructive" });
+    }
+  });
+
+  const updateStatusMutation = useMutation({
+    mutationFn: ({ id, status }: { id: number; status: string }) => updateInvoiceStatus(id, status),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["invoices"] });
+      toast({ title: "Invoice status updated" });
+    },
+    onError: () => {
+      toast({ title: "Failed to update invoice", variant: "destructive" });
+    }
+  });
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -97,35 +126,30 @@ export default function InvoicesPage() {
   };
 
   const filteredInvoices = invoices.filter(inv => {
-    const matchesSearch = inv.client.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         inv.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = inv.clientName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         inv.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesFilter = filterStatus === "all" || inv.status.toLowerCase() === filterStatus.toLowerCase();
     return matchesSearch && matchesFilter;
   });
 
   const handleCreateInvoice = () => {
-    if (!formData.client || !formData.amount) return;
+    if (!formData.invoiceNumber || !formData.clientName || !formData.amount || !formData.dueDate) {
+      toast({ title: "Please fill in all required fields", variant: "destructive" });
+      return;
+    }
     
-    const newInvoice: Invoice = {
-      id: `INV-${String(invoices.length + 1).padStart(3, '0')}`,
-      client: formData.client,
-      date: new Date().toLocaleDateString(),
-      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString(),
-      amount: `$${parseFloat(formData.amount).toFixed(2)}`,
-      status: "Pending",
+    createMutation.mutate({
+      ...formData,
       items: parseInt(formData.items)
-    };
-    
-    setInvoices([...invoices, newInvoice]);
-    setFormData({ client: "", amount: "", items: "1" });
+    });
   };
 
-  const handleMarkAsPaid = (id: string) => {
-    setInvoices(invoices.map(inv => inv.id === id ? {...inv, status: "Paid"} : inv));
+  const handleMarkAsPaid = (id: number) => {
+    updateStatusMutation.mutate({ id, status: "Paid" });
   };
 
-  const handleDeleteInvoice = (id: string) => {
-    setInvoices(invoices.filter(inv => inv.id !== id));
+  const handleDeleteInvoice = (id: number) => {
+    deleteMutation.mutate(id);
   };
 
   const stats = {
@@ -141,9 +165,9 @@ export default function InvoicesPage() {
           <h1 className="text-4xl font-extrabold tracking-tight text-foreground">Invoices</h1>
           <p className="text-muted-foreground mt-2 text-lg">Track payments and manage billing.</p>
         </div>
-        <Dialog>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="lg" className="shadow-lg shadow-primary/25">
+            <Button size="lg" className="shadow-lg shadow-primary/25" data-testid="button-create-invoice">
               <Plus className="mr-2 h-4 w-4" /> Create Invoice
             </Button>
           </DialogTrigger>
@@ -153,11 +177,21 @@ export default function InvoicesPage() {
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
+                <Label>Invoice Number</Label>
+                <Input 
+                  placeholder="INV-001" 
+                  value={formData.invoiceNumber}
+                  onChange={(e) => setFormData({...formData, invoiceNumber: e.target.value})}
+                  data-testid="input-invoice-number"
+                />
+              </div>
+              <div className="grid gap-2">
                 <Label>Client</Label>
                 <Input 
                   placeholder="Client name" 
-                  value={formData.client}
-                  onChange={(e) => setFormData({...formData, client: e.target.value})}
+                  value={formData.clientName}
+                  onChange={(e) => setFormData({...formData, clientName: e.target.value})}
+                  data-testid="input-invoice-client"
                 />
               </div>
               <div className="grid gap-2">
@@ -167,6 +201,7 @@ export default function InvoicesPage() {
                   placeholder="1000.00" 
                   value={formData.amount}
                   onChange={(e) => setFormData({...formData, amount: e.target.value})}
+                  data-testid="input-invoice-amount"
                 />
               </div>
               <div className="grid gap-2">
@@ -176,11 +211,21 @@ export default function InvoicesPage() {
                   placeholder="1" 
                   value={formData.items}
                   onChange={(e) => setFormData({...formData, items: e.target.value})}
+                  data-testid="input-invoice-items"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Due Date</Label>
+                <Input 
+                  type="date" 
+                  value={formData.dueDate}
+                  onChange={(e) => setFormData({...formData, dueDate: e.target.value})}
+                  data-testid="input-invoice-duedate"
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button onClick={handleCreateInvoice}>Create Invoice</Button>
+              <Button onClick={handleCreateInvoice} data-testid="button-submit-invoice">Create Invoice</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -226,6 +271,7 @@ export default function InvoicesPage() {
                   className="pl-10 bg-background border-border/50"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                  data-testid="input-search-invoices"
                 />
               </div>
             </div>
@@ -240,88 +286,94 @@ export default function InvoicesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <motion.div 
-            variants={container}
-            initial="hidden"
-            animate="show"
-            className="space-y-3"
-          >
-            {filteredInvoices.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <FileText className="h-8 w-8 mx-auto mb-2 opacity-20" />
-                <p>No invoices found</p>
-              </div>
-            ) : (
-              filteredInvoices.map((invoice) => (
-                <motion.div key={invoice.id} variants={item}>
-                  <div className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-border/50 bg-card hover:bg-accent/30 hover:border-primary/20 hover:shadow-md transition-all cursor-pointer">
-                    <div className="flex items-center gap-5 mb-4 sm:mb-0">
-                      <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center text-foreground shadow-inner">
-                        <FileText className="h-5 w-5 opacity-70" />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <p className="font-bold text-foreground text-base">{invoice.id}</p>
-                          <Badge variant="outline" className={`font-medium border ${getStatusColor(invoice.status)}`}>
-                            {getStatusIcon(invoice.status)}
-                            {invoice.status}
-                          </Badge>
+          {isLoading ? (
+            <div className="text-center py-8 text-muted-foreground">Loading invoices...</div>
+          ) : (
+            <motion.div 
+              variants={container}
+              initial="hidden"
+              animate="show"
+              className="space-y-3"
+            >
+              {filteredInvoices.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <FileText className="h-8 w-8 mx-auto mb-2 opacity-20" />
+                  <p>No invoices found</p>
+                </div>
+              ) : (
+                filteredInvoices.map((invoice) => (
+                  <motion.div key={invoice.id} variants={item}>
+                    <div className="group flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-border/50 bg-card hover:bg-accent/30 hover:border-primary/20 hover:shadow-md transition-all cursor-pointer" data-testid={`card-invoice-${invoice.id}`}>
+                      <div className="flex items-center gap-5 mb-4 sm:mb-0">
+                        <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-900 flex items-center justify-center text-foreground shadow-inner">
+                          <FileText className="h-5 w-5 opacity-70" />
                         </div>
-                        <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
-                          <span className="font-medium text-foreground/80">{invoice.client}</span>
-                          <span>•</span>
-                          <span>{invoice.items} items</span>
+                        <div>
+                          <div className="flex items-center gap-3">
+                            <p className="font-bold text-foreground text-base" data-testid={`text-number-${invoice.id}`}>{invoice.invoiceNumber}</p>
+                            <Badge variant="outline" className={`font-medium border ${getStatusColor(invoice.status)}`}>
+                              {getStatusIcon(invoice.status)}
+                              {invoice.status}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
+                            <span className="font-medium text-foreground/80" data-testid={`text-client-${invoice.id}`}>{invoice.clientName}</span>
+                            <span>•</span>
+                            <span>{invoice.items} items</span>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center justify-between sm:gap-8">
-                      <div className="text-right mr-4 sm:mr-0">
-                        <p className="text-lg font-bold text-foreground tracking-tight">{invoice.amount}</p>
-                        <p className="text-xs font-medium text-muted-foreground mt-0.5">Due {invoice.dueDate}</p>
                       </div>
                       
-                      <div className="flex items-center gap-1 sm:opacity-0 group-hover:opacity-100 transition-all">
-                        {invoice.status !== "Paid" && (
+                      <div className="flex items-center justify-between sm:gap-8">
+                        <div className="text-right mr-4 sm:mr-0">
+                          <p className="text-lg font-bold text-foreground tracking-tight" data-testid={`text-amount-${invoice.id}`}>${parseFloat(invoice.amount).toFixed(2)}</p>
+                          <p className="text-xs font-medium text-muted-foreground mt-0.5">Due {format(new Date(invoice.dueDate), "MMM dd, yyyy")}</p>
+                        </div>
+                        
+                        <div className="flex items-center gap-1 sm:opacity-0 group-hover:opacity-100 transition-all">
+                          {invoice.status !== "Paid" && (
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-muted-foreground hover:text-emerald-600"
+                              onClick={() => handleMarkAsPaid(invoice.id)}
+                              title="Mark as Paid"
+                              data-testid={`button-mark-paid-${invoice.id}`}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 text-muted-foreground hover:text-emerald-600"
-                            onClick={() => handleMarkAsPaid(invoice.id)}
-                            title="Mark as Paid"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleDeleteInvoice(invoice.id)}
+                            title="Delete"
+                            data-testid={`button-delete-${invoice.id}`}
                           >
-                            <Check className="h-4 w-4" />
+                            <Trash2 className="h-4 w-4" />
                           </Button>
-                        )}
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDeleteInvoice(invoice.id)}
-                          title="Delete"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem>View Details</DropdownMenuItem>
-                            <DropdownMenuItem>Edit Invoice</DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem>View Details</DropdownMenuItem>
+                              <DropdownMenuItem>Edit Invoice</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </motion.div>
-              ))
-            )}
-          </motion.div>
+                  </motion.div>
+                ))
+              )}
+            </motion.div>
+          )}
         </CardContent>
       </Card>
     </div>

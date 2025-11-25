@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,84 +12,89 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion } from "framer-motion";
-
-interface Appointment {
-  id: number;
-  title: string;
-  client: string;
-  date: Date;
-  time: string;
-  duration: string;
-  location: string;
-  type: string;
-  status: string;
-  avatar: string;
-  color: string;
-}
-
-const initialAppointments: Appointment[] = [
-  {
-    id: 1,
-    title: "Consultation with Acme Corp",
-    client: "Alice Smith",
-    date: new Date(),
-    time: "10:00 AM",
-    duration: "1h",
-    location: "Zoom Meeting",
-    type: "Consultation",
-    status: "Confirmed",
-    avatar: "AS",
-    color: "bg-blue-500"
-  },
-  {
-    id: 2,
-    title: "Project Review",
-    client: "Bob Jones",
-    date: new Date(),
-    time: "2:00 PM",
-    duration: "1h 30m",
-    location: "123 Business Rd, Tech City",
-    type: "On-site",
-    status: "Pending",
-    avatar: "BJ",
-    color: "bg-purple-500"
-  },
-];
+import { getAppointments, createAppointment, deleteAppointment } from "@/lib/api";
+import type { Appointment } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
 
 export default function CalendarPage() {
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
-  const [formData, setFormData] = useState({ title: "", client: "", date: "", time: "", type: "consultation", notes: "" });
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [formData, setFormData] = useState({ 
+    title: "", 
+    clientName: "", 
+    date: "", 
+    time: "", 
+    duration: "1h",
+    location: "Zoom Meeting",
+    type: "Consultation", 
+    status: "Pending"
+  });
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const { data: appointments = [], isLoading } = useQuery({
+    queryKey: ["appointments"],
+    queryFn: getAppointments,
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createAppointment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      toast({ title: "Appointment created successfully" });
+      setDialogOpen(false);
+      setFormData({ 
+        title: "", 
+        clientName: "", 
+        date: "", 
+        time: "", 
+        duration: "1h",
+        location: "Zoom Meeting",
+        type: "Consultation", 
+        status: "Pending"
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to create appointment", variant: "destructive" });
+    }
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: deleteAppointment,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["appointments"] });
+      toast({ title: "Appointment deleted" });
+    },
+    onError: () => {
+      toast({ title: "Failed to delete appointment", variant: "destructive" });
+    }
+  });
 
   const filteredAppointments = appointments.filter(apt => 
-    date && apt.date.toDateString() === date.toDateString()
+    date && apt.date === format(date, "yyyy-MM-dd")
   );
 
   const handleAddAppointment = () => {
-    if (!formData.title || !formData.client || !formData.date || !formData.time) return;
+    if (!formData.title || !formData.clientName || !formData.date || !formData.time) {
+      toast({ title: "Please fill in all required fields", variant: "destructive" });
+      return;
+    }
     
-    const newDate = new Date(formData.date);
-    const newApt: Appointment = {
-      id: Math.max(...appointments.map(a => a.id), 0) + 1,
-      title: formData.title,
-      client: formData.client,
-      date: newDate,
-      time: formData.time,
-      duration: "1h",
-      location: formData.type === "onsite" ? "Office" : "Zoom Meeting",
-      type: formData.type,
-      status: "Pending",
-      avatar: formData.client.split(' ').map(n => n[0]).join(''),
-      color: `bg-${["blue", "purple", "pink", "emerald"][Math.random() * 4 | 0]}-500`
-    };
-    
-    setAppointments([...appointments, newApt]);
-    setFormData({ title: "", client: "", date: "", time: "", type: "consultation", notes: "" });
+    createMutation.mutate(formData);
   };
 
   const handleDeleteAppointment = (id: number) => {
-    setAppointments(appointments.filter(a => a.id !== id));
+    deleteMutation.mutate(id);
+  };
+
+  const getAppointmentColor = (type: string) => {
+    const colors: Record<string, string> = {
+      "Consultation": "bg-blue-500",
+      "On-site": "bg-purple-500",
+      "Internal": "bg-emerald-500",
+      "Follow-up": "bg-pink-500",
+    };
+    return colors[type] || "bg-gray-500";
   };
 
   return (
@@ -98,9 +104,9 @@ export default function CalendarPage() {
           <h1 className="text-4xl font-extrabold tracking-tight text-foreground">Calendar</h1>
           <p className="text-muted-foreground mt-2 text-lg">Manage your schedule effectively.</p>
         </div>
-        <Dialog>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button size="lg" className="shadow-lg shadow-primary/25">
+            <Button size="lg" className="shadow-lg shadow-primary/25" data-testid="button-add-appointment">
               <Plus className="mr-2 h-4 w-4" /> Add Appointment
             </Button>
           </DialogTrigger>
@@ -116,6 +122,7 @@ export default function CalendarPage() {
                   placeholder="Meeting title" 
                   value={formData.title}
                   onChange={(e) => setFormData({...formData, title: e.target.value})}
+                  data-testid="input-appointment-title"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -126,6 +133,7 @@ export default function CalendarPage() {
                     type="date" 
                     value={formData.date}
                     onChange={(e) => setFormData({...formData, date: e.target.value})}
+                    data-testid="input-appointment-date"
                   />
                 </div>
                 <div className="grid gap-2">
@@ -135,6 +143,7 @@ export default function CalendarPage() {
                     type="time" 
                     value={formData.time}
                     onChange={(e) => setFormData({...formData, time: e.target.value})}
+                    data-testid="input-appointment-time"
                   />
                 </div>
               </div>
@@ -143,26 +152,40 @@ export default function CalendarPage() {
                 <Input 
                   id="client" 
                   placeholder="Client name" 
-                  value={formData.client}
-                  onChange={(e) => setFormData({...formData, client: e.target.value})}
+                  value={formData.clientName}
+                  onChange={(e) => setFormData({...formData, clientName: e.target.value})}
+                  data-testid="input-appointment-client"
                 />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="type">Type</Label>
                 <Select value={formData.type} onValueChange={(value) => setFormData({...formData, type: value})}>
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="select-appointment-type">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="consultation">Consultation</SelectItem>
-                    <SelectItem value="onsite">On-site</SelectItem>
-                    <SelectItem value="internal">Internal</SelectItem>
+                    <SelectItem value="Consultation">Consultation</SelectItem>
+                    <SelectItem value="On-site">On-site</SelectItem>
+                    <SelectItem value="Internal">Internal</SelectItem>
+                    <SelectItem value="Follow-up">Follow-up</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="location">Location</Label>
+                <Input 
+                  id="location" 
+                  placeholder="Meeting location" 
+                  value={formData.location}
+                  onChange={(e) => setFormData({...formData, location: e.target.value})}
+                  data-testid="input-appointment-location"
+                />
+              </div>
             </div>
             <DialogFooter>
-              <Button type="submit" onClick={handleAddAppointment}>Schedule Appointment</Button>
+              <Button type="submit" onClick={handleAddAppointment} data-testid="button-submit-appointment">
+                Schedule Appointment
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -193,8 +216,8 @@ export default function CalendarPage() {
                       className="flex items-start gap-3 group cursor-pointer"
                     >
                       <div className="flex flex-col items-center bg-card rounded-lg border shadow-sm px-2 py-1 min-w-[50px]">
-                        <span className="text-xs font-bold text-primary uppercase">{format(apt.date, "MMM")}</span>
-                        <span className="text-lg font-bold text-foreground">{format(apt.date, "d")}</span>
+                        <span className="text-xs font-bold text-primary uppercase">{format(new Date(apt.date), "MMM")}</span>
+                        <span className="text-lg font-bold text-foreground">{format(new Date(apt.date), "d")}</span>
                       </div>
                       <div>
                         <div className="font-medium text-sm group-hover:text-primary transition-colors">{apt.title}</div>
@@ -217,7 +240,11 @@ export default function CalendarPage() {
             </h2>
           </div>
 
-          {filteredAppointments.length === 0 ? (
+          {isLoading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-muted-foreground">Loading appointments...</div>
+            </div>
+          ) : filteredAppointments.length === 0 ? (
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -238,18 +265,18 @@ export default function CalendarPage() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.1 }}
                 >
-                  <Card className="overflow-hidden border-none shadow-sm hover:shadow-md transition-all group">
-                    <div className={`h-1 w-full ${apt.color}`} />
+                  <Card className="overflow-hidden border-none shadow-sm hover:shadow-md transition-all group" data-testid={`card-appointment-${apt.id}`}>
+                    <div className={`h-1 w-full ${getAppointmentColor(apt.type)}`} />
                     <CardContent className="p-6">
                       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                         <div className="flex gap-4">
                           <div className="flex flex-col text-center min-w-[80px] border-r pr-4">
-                            <span className="text-muted-foreground text-sm font-medium">{apt.time}</span>
+                            <span className="text-muted-foreground text-sm font-medium" data-testid={`text-time-${apt.id}`}>{apt.time}</span>
                             <span className="text-xs text-muted-foreground/60 mt-1">{apt.duration}</span>
                           </div>
                           <div className="space-y-1">
                             <div className="flex items-center gap-2">
-                              <h3 className="text-lg font-bold group-hover:text-primary transition-colors">{apt.title}</h3>
+                              <h3 className="text-lg font-bold group-hover:text-primary transition-colors" data-testid={`text-title-${apt.id}`}>{apt.title}</h3>
                               <Badge variant={apt.status === "Confirmed" ? "default" : "secondary"} className="rounded-full px-2.5 text-[10px] font-bold uppercase tracking-wide">
                                 {apt.status}
                               </Badge>
@@ -257,7 +284,7 @@ export default function CalendarPage() {
                             <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
                               <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded-md">
                                 <User className="h-3.5 w-3.5" />
-                                {apt.client}
+                                {apt.clientName}
                               </div>
                               <div className="flex items-center gap-1.5 bg-muted/50 px-2 py-1 rounded-md">
                                 {apt.location.includes("Zoom") ? <Video className="h-3.5 w-3.5" /> : <MapPin className="h-3.5 w-3.5" />}
@@ -273,10 +300,10 @@ export default function CalendarPage() {
                             size="sm" 
                             className="rounded-full text-destructive hover:text-destructive"
                             onClick={() => handleDeleteAppointment(apt.id)}
+                            data-testid={`button-delete-${apt.id}`}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
-                          <Button size="sm" className="rounded-full">Join Meeting</Button>
                         </div>
                       </div>
                     </CardContent>
