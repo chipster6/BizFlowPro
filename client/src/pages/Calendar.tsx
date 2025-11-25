@@ -3,7 +3,7 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Clock, MapPin, User, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Video } from "lucide-react";
+import { Plus, Clock, MapPin, User, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Video, X, Trash2 } from "lucide-react";
 import { format, addDays } from "date-fns";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion } from "framer-motion";
 
-const appointments = [
+interface Appointment {
+  id: number;
+  title: string;
+  client: string;
+  date: Date;
+  time: string;
+  duration: string;
+  location: string;
+  type: string;
+  status: string;
+  avatar: string;
+  color: string;
+}
+
+const initialAppointments: Appointment[] = [
   {
     id: 1,
     title: "Consultation with Acme Corp",
@@ -39,28 +53,43 @@ const appointments = [
     avatar: "BJ",
     color: "bg-purple-500"
   },
-  {
-    id: 3,
-    title: "Quarterly Planning",
-    client: "Carol Williams",
-    date: addDays(new Date(), 1),
-    time: "11:00 AM",
-    duration: "2h",
-    location: "Office",
-    type: "Internal",
-    status: "Confirmed",
-    avatar: "CW",
-    color: "bg-emerald-500"
-  }
 ];
 
 export default function CalendarPage() {
   const [date, setDate] = useState<Date | undefined>(new Date());
-  const [selectedType, setSelectedType] = useState("");
+  const [appointments, setAppointments] = useState<Appointment[]>(initialAppointments);
+  const [formData, setFormData] = useState({ title: "", client: "", date: "", time: "", type: "consultation", notes: "" });
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const filteredAppointments = appointments.filter(apt => 
     date && apt.date.toDateString() === date.toDateString()
   );
+
+  const handleAddAppointment = () => {
+    if (!formData.title || !formData.client || !formData.date || !formData.time) return;
+    
+    const newDate = new Date(formData.date);
+    const newApt: Appointment = {
+      id: Math.max(...appointments.map(a => a.id), 0) + 1,
+      title: formData.title,
+      client: formData.client,
+      date: newDate,
+      time: formData.time,
+      duration: "1h",
+      location: formData.type === "onsite" ? "Office" : "Zoom Meeting",
+      type: formData.type,
+      status: "Pending",
+      avatar: formData.client.split(' ').map(n => n[0]).join(''),
+      color: `bg-${["blue", "purple", "pink", "emerald"][Math.random() * 4 | 0]}-500`
+    };
+    
+    setAppointments([...appointments, newApt]);
+    setFormData({ title: "", client: "", date: "", time: "", type: "consultation", notes: "" });
+  };
+
+  const handleDeleteAppointment = (id: number) => {
+    setAppointments(appointments.filter(a => a.id !== id));
+  };
 
   return (
     <div className="space-y-8 h-full flex flex-col">
@@ -82,34 +111,58 @@ export default function CalendarPage() {
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
                 <Label htmlFor="title">Title</Label>
-                <Input id="title" placeholder="Meeting title" className="border-gray-200 focus:border-primary focus:ring-primary/20" />
+                <Input 
+                  id="title" 
+                  placeholder="Meeting title" 
+                  value={formData.title}
+                  onChange={(e) => setFormData({...formData, title: e.target.value})}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="date">Date</Label>
-                  <Input id="date" type="date" />
+                  <Input 
+                    id="date" 
+                    type="date" 
+                    value={formData.date}
+                    onChange={(e) => setFormData({...formData, date: e.target.value})}
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="time">Time</Label>
-                  <Input id="time" type="time" />
+                  <Input 
+                    id="time" 
+                    type="time" 
+                    value={formData.time}
+                    onChange={(e) => setFormData({...formData, time: e.target.value})}
+                  />
                 </div>
               </div>
               <div className="grid gap-2">
-                <Label htmlFor="client">Client</Label>
-                <Select>
+                <Label htmlFor="client">Client Name</Label>
+                <Input 
+                  id="client" 
+                  placeholder="Client name" 
+                  value={formData.client}
+                  onChange={(e) => setFormData({...formData, client: e.target.value})}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="type">Type</Label>
+                <Select value={formData.type} onValueChange={(value) => setFormData({...formData, type: value})}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select client" />
+                    <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="alice">Alice Smith</SelectItem>
-                    <SelectItem value="bob">Bob Jones</SelectItem>
-                    <SelectItem value="carol">Carol Williams</SelectItem>
+                    <SelectItem value="consultation">Consultation</SelectItem>
+                    <SelectItem value="onsite">On-site</SelectItem>
+                    <SelectItem value="internal">Internal</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <DialogFooter>
-              <Button type="submit">Schedule Appointment</Button>
+              <Button type="submit" onClick={handleAddAppointment}>Schedule Appointment</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -162,10 +215,6 @@ export default function CalendarPage() {
             <h2 className="text-2xl font-bold flex items-center gap-2">
               {date ? format(date, "EEEE, MMMM do") : "Select a date"}
             </h2>
-            <div className="flex gap-2">
-              <Button variant="outline" size="icon" className="rounded-full"><ChevronLeft className="h-4 w-4" /></Button>
-              <Button variant="outline" size="icon" className="rounded-full"><ChevronRight className="h-4 w-4" /></Button>
-            </div>
           </div>
 
           {filteredAppointments.length === 0 ? (
@@ -178,8 +227,7 @@ export default function CalendarPage() {
                 <CalendarIcon className="h-8 w-8 opacity-50" />
               </div>
               <h3 className="text-lg font-semibold text-foreground">No appointments scheduled</h3>
-              <p className="max-w-sm text-center mt-2">You have a free day! Click 'Add Appointment' to schedule something for {date ? format(date, "MMMM do") : "this day"}.</p>
-              <Button variant="link" className="mt-4 text-primary">Schedule one now</Button>
+              <p className="max-w-sm text-center mt-2">You have a free day! Click 'Add Appointment' to schedule something.</p>
             </motion.div>
           ) : (
             <div className="space-y-4">
@@ -220,7 +268,14 @@ export default function CalendarPage() {
                         </div>
                         
                         <div className="flex items-center gap-3">
-                          <Button variant="outline" size="sm" className="rounded-full">Reschedule</Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="rounded-full text-destructive hover:text-destructive"
+                            onClick={() => handleDeleteAppointment(apt.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                           <Button size="sm" className="rounded-full">Join Meeting</Button>
                         </div>
                       </div>
@@ -228,14 +283,6 @@ export default function CalendarPage() {
                   </Card>
                 </motion.div>
               ))}
-              
-              {/* Time slots visualizer */}
-              <div className="relative pt-8 pb-4">
-                <div className="absolute left-0 right-0 top-1/2 border-t border-dashed border-muted-foreground/30"></div>
-                <div className="relative flex justify-center">
-                  <span className="bg-background px-2 text-xs text-muted-foreground uppercase font-medium">Free slots available after 4:00 PM</span>
-                </div>
-              </div>
             </div>
           )}
         </div>

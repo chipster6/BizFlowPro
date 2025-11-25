@@ -2,8 +2,8 @@ import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Plus, Search, Mail, Phone, MoreHorizontal, MapPin, Filter, Star, MessageSquare, Calendar } from "lucide-react";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Plus, Search, Mail, Phone, MoreHorizontal, MapPin, Filter, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,7 +17,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
 
-const clients = [
+interface Client {
+  id: number;
+  name: string;
+  company: string;
+  email: string;
+  phone: string;
+  status: string;
+  lastContact: string;
+  location: string;
+  avatar: string;
+  color: string;
+  tags: string[];
+}
+
+const initialClients: Client[] = [
   {
     id: 1,
     name: "Alice Smith",
@@ -44,42 +58,11 @@ const clients = [
     color: "bg-purple-500",
     tags: ["Startups"]
   },
-  {
-    id: 3,
-    name: "Carol Williams",
-    company: "Global Designs",
-    email: "carol@global.design",
-    phone: "+1 (555) 456-7890",
-    status: "Inactive",
-    lastContact: "1 month ago",
-    location: "London, UK",
-    avatar: "CW",
-    color: "bg-pink-500",
-    tags: ["Design"]
-  },
-  {
-    id: 4,
-    name: "David Brown",
-    company: "Consulting Partners",
-    email: "david@consulting.com",
-    phone: "+1 (555) 789-0123",
-    status: "Lead",
-    lastContact: "Yesterday",
-    location: "Chicago, IL",
-    avatar: "DB",
-    color: "bg-orange-500",
-    tags: ["New"]
-  },
 ];
 
 const container = {
   hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.1
-    }
-  }
+  show: { opacity: 1, transition: { staggerChildren: 0.1 } }
 };
 
 const item = {
@@ -89,12 +72,40 @@ const item = {
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [clients, setClients] = useState<Client[]>(initialClients);
+  const [formData, setFormData] = useState({ firstName: "", lastName: "", email: "", company: "", phone: "" });
 
   const filteredClients = clients.filter(client => 
     client.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
     client.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleAddClient = () => {
+    if (!formData.firstName || !formData.email) return;
+    
+    const name = `${formData.firstName} ${formData.lastName}`;
+    const newClient: Client = {
+      id: Math.max(...clients.map(c => c.id), 0) + 1,
+      name,
+      company: formData.company,
+      email: formData.email,
+      phone: formData.phone,
+      status: "Lead",
+      lastContact: "Just now",
+      location: "New Location",
+      avatar: name.split(' ').map(n => n[0]).join(''),
+      color: `bg-${["blue", "purple", "pink", "emerald"][Math.random() * 4 | 0]}-500`,
+      tags: ["New"]
+    };
+    
+    setClients([...clients, newClient]);
+    setFormData({ firstName: "", lastName: "", email: "", company: "", phone: "" });
+  };
+
+  const handleDeleteClient = (id: number) => {
+    setClients(clients.filter(c => c.id !== id));
+  };
 
   return (
     <div className="space-y-8">
@@ -117,24 +128,54 @@ export default function ClientsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="first-name">First name</Label>
-                  <Input id="first-name" placeholder="Max" />
+                  <Input 
+                    id="first-name" 
+                    placeholder="Max" 
+                    value={formData.firstName}
+                    onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                  />
                 </div>
                 <div className="grid gap-2">
                   <Label htmlFor="last-name">Last name</Label>
-                  <Input id="last-name" placeholder="Robinson" />
+                  <Input 
+                    id="last-name" 
+                    placeholder="Robinson" 
+                    value={formData.lastName}
+                    onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                  />
                 </div>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" placeholder="max@example.com" />
+                <Input 
+                  id="email" 
+                  type="email" 
+                  placeholder="max@example.com" 
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="company">Company</Label>
-                <Input id="company" placeholder="Company Inc." />
+                <Input 
+                  id="company" 
+                  placeholder="Company Inc." 
+                  value={formData.company}
+                  onChange={(e) => setFormData({...formData, company: e.target.value})}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input 
+                  id="phone" 
+                  placeholder="+1 (555) 000-0000" 
+                  value={formData.phone}
+                  onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                />
               </div>
             </div>
             <DialogFooter>
-              <Button type="submit">Create Client</Button>
+              <Button type="submit" onClick={handleAddClient}>Create Client</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -150,10 +191,6 @@ export default function ClientsPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
-        <div className="h-6 w-px bg-border mx-2" />
-        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground">
-          <Filter className="h-4 w-4 mr-2" /> Filters
-        </Button>
       </div>
 
       <motion.div 
@@ -184,9 +221,13 @@ export default function ClientsPage() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem>View Profile</DropdownMenuItem>
-                    <DropdownMenuItem>Edit Details</DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive">Delete Client</DropdownMenuItem>
+                    <DropdownMenuItem 
+                      className="text-destructive"
+                      onClick={() => handleDeleteClient(client.id)}
+                    >
+                      Delete Client
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
               </CardHeader>
@@ -207,31 +248,25 @@ export default function ClientsPage() {
                 
                 <div className="grid gap-3 text-sm text-muted-foreground mt-2 bg-muted/30 p-3 rounded-lg">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center shadow-sm">
-                      <Mail className="h-4 w-4 text-primary" />
-                    </div>
+                    <Mail className="h-4 w-4 text-primary" />
                     <span className="truncate">{client.email}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center shadow-sm">
-                      <Phone className="h-4 w-4 text-primary" />
-                    </div>
+                    <Phone className="h-4 w-4 text-primary" />
                     <span>{client.phone}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-background flex items-center justify-center shadow-sm">
-                      <MapPin className="h-4 w-4 text-primary" />
-                    </div>
+                    <MapPin className="h-4 w-4 text-primary" />
                     <span>{client.location}</span>
                   </div>
                 </div>
 
                 <div className="flex gap-2 mt-2">
-                  <Button variant="outline" className="flex-1 h-10 text-xs font-semibold group-hover:border-primary/50 group-hover:text-primary transition-colors">
-                    <MessageSquare className="h-3.5 w-3.5 mr-2" /> Message
+                  <Button variant="outline" className="flex-1 h-10 text-xs font-semibold">
+                    Message
                   </Button>
-                  <Button className="flex-1 h-10 text-xs font-semibold opacity-90 hover:opacity-100">
-                    <Calendar className="h-3.5 w-3.5 mr-2" /> Schedule
+                  <Button className="flex-1 h-10 text-xs font-semibold">
+                    Schedule
                   </Button>
                 </div>
               </CardContent>
