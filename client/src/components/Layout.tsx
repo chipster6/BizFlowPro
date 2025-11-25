@@ -57,21 +57,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
           {navigation.map((item) => {
             const isActive = location === item.href;
             return (
-              <Link key={item.name} href={item.href}>
-                <a
-                  className={`group flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                    isActive
-                      ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
-                      : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-                  }`}
-                  onClick={() => setIsMobileOpen(false)}
-                >
-                  <div className="flex items-center gap-3">
-                    <item.icon className={`w-5 h-5 ${isActive ? "text-white" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground"}`} />
-                    {item.name}
-                  </div>
-                  {isActive && <ChevronRight className="w-4 h-4 opacity-50" />}
-                </a>
+              <Link 
+                key={item.name} 
+                href={item.href}
+                className={`group flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  isActive
+                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
+                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
+                }`}
+                onClick={() => setIsMobileOpen(false)}
+              >
+                <div className="flex items-center gap-3">
+                  <item.icon className={`w-5 h-5 ${isActive ? "text-white" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground"}`} />
+                  {item.name}
+                </div>
+                {isActive && <ChevronRight className="w-4 h-4 opacity-50" />}
               </Link>
             );
           })}
