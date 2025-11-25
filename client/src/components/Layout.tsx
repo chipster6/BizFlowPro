@@ -28,19 +28,16 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export function Layout({ children }: { children: React.ReactNode }) {
-  const [location] = useLocation();
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
+const navigation = [
+  { name: "Dashboard", href: "/", icon: LayoutDashboard },
+  { name: "Calendar", href: "/calendar", icon: Calendar },
+  { name: "Clients", href: "/clients", icon: Users },
+  { name: "Finances", href: "/finances", icon: Receipt },
+  { name: "Invoices", href: "/invoices", icon: FileText },
+];
 
-  const navigation = [
-    { name: "Dashboard", href: "/", icon: LayoutDashboard },
-    { name: "Calendar", href: "/calendar", icon: Calendar },
-    { name: "Clients", href: "/clients", icon: Users },
-    { name: "Finances", href: "/finances", icon: Receipt },
-    { name: "Invoices", href: "/invoices", icon: FileText },
-  ];
-
-  const NavContent = () => (
+function SidebarContent({ currentPath, onNavigate }: { currentPath: string, onNavigate?: () => void }) {
+  return (
     <div className="flex flex-col h-full bg-sidebar text-sidebar-foreground">
       <div className="p-6">
         <div className="flex items-center gap-3 mb-8">
@@ -55,7 +52,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
         <div className="space-y-1">
           {navigation.map((item) => {
-            const isActive = location === item.href;
+            const isActive = currentPath === item.href;
             return (
               <Link 
                 key={item.name} 
@@ -65,7 +62,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-md"
                     : "text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-foreground"
                 }`}
-                onClick={() => setIsMobileOpen(false)}
+                onClick={onNavigate}
               >
                 <div className="flex items-center gap-3">
                   <item.icon className={`w-5 h-5 ${isActive ? "text-white" : "text-sidebar-foreground/50 group-hover:text-sidebar-foreground"}`} />
@@ -95,12 +92,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </div>
     </div>
   );
+}
+
+export function Layout({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   return (
     <div className="min-h-screen bg-background flex font-sans">
       {/* Desktop Sidebar */}
       <div className="hidden md:flex w-72 flex-col fixed inset-y-0 z-50 bg-sidebar shadow-xl border-r border-sidebar-border">
-        <NavContent />
+        <SidebarContent currentPath={location} />
       </div>
 
       {/* Main Content */}
@@ -115,7 +117,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="p-0 w-72 border-r bg-sidebar text-sidebar-foreground">
-                <NavContent />
+                <SidebarContent 
+                  currentPath={location} 
+                  onNavigate={() => setIsMobileOpen(false)} 
+                />
               </SheetContent>
             </Sheet>
             <h1 className="text-lg font-bold text-foreground md:hidden">ProManage</h1>
