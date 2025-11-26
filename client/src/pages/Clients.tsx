@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
 import { getClients, createClient, deleteClient } from "@/lib/api";
@@ -32,7 +32,7 @@ const item = {
 
 export default function ClientsPage() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({ 
     name: "", 
     email: "", 
@@ -55,7 +55,7 @@ export default function ClientsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["clients"] });
       toast({ title: "Client added successfully" });
-      setDialogOpen(false);
+      setIsOpen(false);
       setFormData({ 
         name: "", 
         email: "", 
@@ -120,7 +120,7 @@ export default function ClientsPage() {
           <h1 className="text-4xl font-extrabold tracking-tight text-foreground">Clients</h1>
           <p className="text-muted-foreground mt-2 text-lg">Manage your network and relationships.</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog modal={true} open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button size="lg" className="shadow-lg shadow-primary/25" data-testid="button-add-client">
               <Plus className="mr-2 h-4 w-4" /> Add Client
@@ -129,6 +129,7 @@ export default function ClientsPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New Client</DialogTitle>
+              <DialogDescription className="sr-only">Add a new client to your database by filling out the form below</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">

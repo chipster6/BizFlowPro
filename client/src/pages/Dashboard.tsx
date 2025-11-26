@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -15,6 +18,7 @@ import {
 } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Bar, BarChart } from "recharts";
 import { motion } from "framer-motion";
+import { getInvoices, getTransactions } from "@/lib/api";
 
 const data = [
   { name: "Jan", income: 4000, expenses: 2400 },
@@ -42,6 +46,24 @@ const item = {
 };
 
 export default function Dashboard() {
+  const [, setLocation] = useLocation();
+  
+  const { data: invoices = [] } = useQuery({
+    queryKey: ["invoices"],
+    queryFn: getInvoices,
+  });
+
+  const { data: transactions = [] } = useQuery({
+    queryKey: ["transactions"],
+    queryFn: getTransactions,
+  });
+
+  const totalRevenue = transactions
+    .filter(t => t.type === "income")
+    .reduce((sum, t) => sum + parseFloat(t.amount), 0);
+
+  const pendingInvoices = invoices.filter(i => i.status === "Pending").length;
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -50,10 +72,21 @@ export default function Dashboard() {
           <p className="text-muted-foreground mt-2 text-lg">Welcome back, Jane. Here's what's happening today.</p>
         </div>
         <div className="flex gap-3">
-          <Button size="lg" className="shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all">
+          <Button 
+            size="lg" 
+            className="shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all"
+            onClick={() => setLocation("/calendar")}
+            data-testid="button-new-appointment"
+          >
             <Calendar className="mr-2 h-4 w-4" /> New Appointment
           </Button>
-          <Button variant="outline" size="lg" className="bg-background/50 backdrop-blur-sm border-border hover:bg-background hover:border-primary/50">
+          <Button 
+            variant="outline" 
+            size="lg" 
+            className="bg-background/50 backdrop-blur-sm border-border hover:bg-background hover:border-primary/50"
+            onClick={() => setLocation("/invoices")}
+            data-testid="button-create-invoice"
+          >
             <DollarSign className="mr-2 h-4 w-4" /> Create Invoice
           </Button>
         </div>
@@ -66,9 +99,9 @@ export default function Dashboard() {
         className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
       >
         {[
-          { title: "Total Revenue", value: "$45,231.89", change: "+20.1%", icon: DollarSign, color: "text-primary", bg: "bg-primary/10" },
+          { title: "Total Revenue", value: `$${totalRevenue.toFixed(2)}`, change: "+20.1%", icon: DollarSign, color: "text-primary", bg: "bg-primary/10" },
           { title: "Active Clients", value: "+2,350", change: "+180.1%", icon: Users, color: "text-blue-500", bg: "bg-blue-500/10" },
-          { title: "Pending Invoices", value: "12", change: "-4% from last month", icon: Clock, color: "text-orange-500", bg: "bg-orange-500/10" },
+          { title: "Pending Invoices", value: pendingInvoices.toString(), change: "-4% from last month", icon: Clock, color: "text-orange-500", bg: "bg-orange-500/10" },
           { title: "Upcoming Tasks", value: "7", change: "3 High Priority", icon: Activity, color: "text-emerald-500", bg: "bg-emerald-500/10" },
         ].map((stat, index) => (
           <motion.div key={index} variants={item}>
@@ -156,7 +189,7 @@ export default function Dashboard() {
                 <CardTitle>Recent Activity</CardTitle>
                 <CardDescription>Latest transactions</CardDescription>
               </div>
-              <Button variant="ghost" size="icon">
+              <Button variant="ghost" size="icon" data-testid="button-recent-activity-menu">
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </CardHeader>

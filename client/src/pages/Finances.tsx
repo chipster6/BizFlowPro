@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   ArrowUpRight, 
@@ -38,7 +38,7 @@ const monthlyData = [
 const COLORS = ['hsl(var(--primary))', 'hsl(var(--chart-2))', 'hsl(var(--chart-3))', 'hsl(var(--chart-4))'];
 
 export default function FinancesPage() {
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({ 
     title: "", 
     amount: "", 
@@ -58,7 +58,7 @@ export default function FinancesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["transactions"] });
       toast({ title: "Transaction recorded successfully" });
-      setDialogOpen(false);
+      setIsOpen(false);
       setFormData({ title: "", amount: "", type: "income", client: "" });
     },
     onError: () => {
@@ -106,7 +106,7 @@ export default function FinancesPage() {
           <Button variant="outline" size="lg" className="border-dashed">
             <Download className="mr-2 h-4 w-4" /> Export Report
           </Button>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog modal={true} open={isOpen} onOpenChange={setIsOpen}>
             <DialogTrigger asChild>
               <Button size="lg" className="shadow-lg shadow-primary/20" data-testid="button-record-transaction">
                 <Plus className="mr-2 h-4 w-4" /> Record Transaction
@@ -115,6 +115,7 @@ export default function FinancesPage() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Record Transaction</DialogTitle>
+                <DialogDescription className="sr-only">Record a new transaction by filling out the form below</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
                 <div className="grid gap-2">

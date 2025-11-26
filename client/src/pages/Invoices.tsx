@@ -28,7 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
 import { getInvoices, createInvoice, deleteInvoice, updateInvoiceStatus } from "@/lib/api";
@@ -48,7 +48,7 @@ const item = {
 export default function InvoicesPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("all");
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({ 
     invoiceNumber: "", 
     clientName: "", 
@@ -70,7 +70,7 @@ export default function InvoicesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["invoices"] });
       toast({ title: "Invoice created successfully" });
-      setDialogOpen(false);
+      setIsOpen(false);
       setFormData({ 
         invoiceNumber: "", 
         clientName: "", 
@@ -165,7 +165,7 @@ export default function InvoicesPage() {
           <h1 className="text-4xl font-extrabold tracking-tight text-foreground">Invoices</h1>
           <p className="text-muted-foreground mt-2 text-lg">Track payments and manage billing.</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog modal={true} open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button size="lg" className="shadow-lg shadow-primary/25" data-testid="button-create-invoice">
               <Plus className="mr-2 h-4 w-4" /> Create Invoice
@@ -174,6 +174,7 @@ export default function InvoicesPage() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Create New Invoice</DialogTitle>
+              <DialogDescription className="sr-only">Create a new invoice by filling out the form below</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">

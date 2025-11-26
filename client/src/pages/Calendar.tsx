@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Clock, MapPin, User, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Video, X, Trash2 } from "lucide-react";
 import { format, addDays } from "date-fns";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -28,8 +28,8 @@ export default function CalendarPage() {
     type: "Consultation", 
     status: "Pending"
   });
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const { toast } = useToast();
+  const [isOpen, setIsOpen] = useState(false);
+  const { toast} = useToast();
   const queryClient = useQueryClient();
 
   const { data: appointments = [], isLoading } = useQuery({
@@ -42,7 +42,7 @@ export default function CalendarPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["appointments"] });
       toast({ title: "Appointment created successfully" });
-      setDialogOpen(false);
+      setIsOpen(false);
       setFormData({ 
         title: "", 
         clientName: "", 
@@ -104,7 +104,7 @@ export default function CalendarPage() {
           <h1 className="text-4xl font-extrabold tracking-tight text-foreground">Calendar</h1>
           <p className="text-muted-foreground mt-2 text-lg">Manage your schedule effectively.</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog modal={true} open={isOpen} onOpenChange={setIsOpen}>
           <DialogTrigger asChild>
             <Button size="lg" className="shadow-lg shadow-primary/25" data-testid="button-add-appointment">
               <Plus className="mr-2 h-4 w-4" /> Add Appointment
@@ -113,6 +113,7 @@ export default function CalendarPage() {
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>New Appointment</DialogTitle>
+              <DialogDescription className="sr-only">Create a new appointment by filling out the form below</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid gap-2">
